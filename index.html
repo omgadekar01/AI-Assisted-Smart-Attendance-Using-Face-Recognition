@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Attendance System - Face Recognition</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Face Detection Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tensorflow.js/4.10.0/tf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tensorflow.js/4.10.0/tf-backend-wasm.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface@0.0.7"></script>
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="logo">
+                <div class="logo-icon-container">
+                    <i class="fas fa-face-smile"></i>
+                    <i class="fas fa-brain ai-badge"></i>
+                </div>
+                <div class="logo-text">
+                    <span class="main-title">Smart Attendance</span>
+                    <span class="ai-label">AI Powered</span>
+                </div>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="#dashboard" class="nav-link active" onclick="switchTab('dashboard')">Dashboard</a></li>
+                <li><a href="#webcam" class="nav-link" onclick="switchTab('webcam')">Webcam</a></li>
+                <li><a href="#attendance" class="nav-link" onclick="switchTab('attendance')">Records</a></li>
+                <li><a href="#students" class="nav-link" onclick="switchTab('students')">Students</a></li>
+                <li><a href="#ai-analytics" class="nav-link" onclick="switchTab('ai-analytics')">AI Analytics</a></li>
+                <li><a href="#settings" class="nav-link" onclick="switchTab('settings')">Settings</a></li>
+            </ul>
+            <div class="status-indicator">
+                <span id="systemStatus" class="status-dot online"></span>
+                <span id="statusText">Ready</span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Container -->
+    <div class="main-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-section">
+                <h3>Statistics</h3>
+                <div class="stat-card">
+                    <div class="stat-number" id="todayMarked">0</div>
+                    <div class="stat-label">Marked Today</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="totalStudents">0</div>
+                    <div class="stat-label">Total Students</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="attendancePercentage">0%</div>
+                    <div class="stat-label">Attendance %</div>
+                </div>
+            </div>
+            <div class="sidebar-section">
+                <h3>Quick Actions</h3>
+                <button class="action-btn" onclick="switchTab('webcam')">
+                    <i class="fas fa-camera"></i> Start Webcam
+                </button>
+                <button class="action-btn" onclick="downloadAttendance()">
+                    <i class="fas fa-download"></i> Export CSV
+                </button>
+                <button class="action-btn" onclick="refreshStats()">
+                    <i class="fas fa-sync"></i> Refresh
+                </button>
+            </div>
+            <div class="sidebar-section">
+                <h3>Time</h3>
+                <div id="currentTime" class="time-display">00:00:00</div>
+                <div id="currentDate" class="date-display">Loading...</div>
+            </div>
+        </aside>
+
+        <!-- Content Area -->
+        <section class="content">
+            <!-- Dashboard Tab -->
+            <div id="dashboard" class="tab-content active">
+                <div class="page-header">
+                    <h1><i class="fas fa-chart-line"></i> Dashboard</h1>
+                    <p>Real-time attendance monitoring system</p>
+                </div>
+
+                <div class="dashboard-grid">
+                    <!-- Statistics Cards -->
+                    <div class="card stats-section">
+                        <h2>Today's Summary</h2>
+                        <div class="stats-grid">
+                            <div class="stat-box">
+                                <div class="stat-icon" style="background: #3498db;">
+                                    <i class="fas fa-users"></i>
+                                </div>
+                                <div class="stat-info">
+                                    <div class="stat-value" id="dash-today">0</div>
+                                    <div class="stat-title">Marked Today</div>
+                                </div>
+                            </div>
+                            <div class="stat-box">
+                                <div class="stat-icon" style="background: #2ecc71;">
+                                    <i class="fas fa-user-check"></i>
+                                </div>
+                                <div class="stat-info">
+                                    <div class="stat-value" id="dash-total">0</div>
+                                    <div class="stat-title">Total Students</div>
+                                </div>
+                            </div>
+                            <div class="stat-box">
+                                <div class="stat-icon" style="background: #e74c3c;">
+                                    <i class="fas fa-user-times"></i>
+                                </div>
+                                <div class="stat-info">
+                                    <div class="stat-value" id="dash-absent">0</div>
+                                    <div class="stat-title">Absent</div>
+                                </div>
+                            </div>
+                            <div class="stat-box">
+                                <div class="stat-icon" style="background: #f39c12;">
+                                    <i class="fas fa-percentage"></i>
+                                </div>
+                                <div class="stat-info">
+                                    <div class="stat-value" id="dash-percentage">0%</div>
+                                    <div class="stat-title">Attendance %</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Activity Feed -->
+                    <div class="card">
+                        <h2>Recent Activity</h2>
+                        <div id="activityFeed" class="activity-feed">
+                            <p class="empty-state">No activity yet</p>
+                        </div>
+                    </div>
+
+                    <!-- Quick Start -->
+                    <div class="card">
+                        <h2>Quick Start</h2>
+                        <div class="quick-start">
+                            <div class="step">
+                                <div class="step-number">1</div>
+                                <div class="step-content">
+                                    <h4>Add Student Photos</h4>
+                                    <p>Upload images to the <code>students</code> folder</p>
+                                </div>
+                            </div>
+                            <div class="step">
+                                <div class="step-number">2</div>
+                                <div class="step-content">
+                                    <h4>Open Webcam</h4>
+                                    <p>Go to Webcam tab and allow camera access</p>
+                                </div>
+                            </div>
+                            <div class="step">
+                                <div class="step-number">3</div>
+                                <div class="step-content">
+                                    <h4>Mark Attendance</h4>
+                                    <p>System automatically recognizes and marks faces</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Webcam Tab -->
+            <div id="webcam" class="tab-content">
+                <div class="page-header">
+                    <h1><i class="fas fa-camera"></i> Webcam Attendance</h1>
+                    <p>Real-time face recognition and attendance marking</p>
+                </div>
+
+                <div class="card">
+                    <div class="webcam-section">
+                        <div id="webcamContainer" class="webcam-container">
+                            <video id="videoElement" autoplay playsinline></video>
+                            <canvas id="canvasElement" style="display: none;"></canvas>
+                            <div class="webcam-overlay">
+                                <div class="overlay-box"></div>
+                                <p>Position face inside the box</p>
+                            </div>
+                        </div>
+
+                        <div class="webcam-controls">
+                            <button id="startBtn" class="btn btn-primary" onclick="startWebcam()">
+                                <i class="fas fa-play"></i> Start Webcam
+                            </button>
+                            <button id="stopBtn" class="btn btn-danger" onclick="stopWebcam()" disabled>
+                                <i class="fas fa-stop"></i> Stop Webcam
+                            </button>
+                            <button id="autoDetectBtn" class="btn btn-success" onclick="toggleAutoDetect()" disabled>
+                                <i class="fas fa-robot"></i> Auto-Detect: OFF
+                            </button>
+                            <button id="captureBtn" class="btn btn-info" onclick="captureFrame()" disabled>
+                                <i class="fas fa-camera"></i> Manual Capture
+                            </button>
+                        </div>
+
+                        <div class="detection-info">
+                            <p id="detectionStatus">Status: Ready</p>
+                            <p id="faceDetectionCount">Faces detected: 0</p>
+                        </div>
+
+                        <div id="recognitionResults" class="recognition-results">
+                            <!-- Results will appear here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Attendance Records Tab -->
+            <div id="attendance" class="tab-content">
+                <div class="page-header">
+                    <h1><i class="fas fa-list"></i> Attendance Records</h1>
+                    <p>Today's attendance log</p>
+                </div>
+
+                <div class="card">
+                    <div class="table-section">
+                        <table class="attendance-table">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Date</th>
+                                    <th>Time</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="attendanceTableBody">
+                                <tr>
+                                    <td colspan="4" class="empty-state">No records yet</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Students Tab -->
+            <div id="students" class="tab-content">
+                <div class="page-header">
+                    <h1><i class="fas fa-user"></i> Registered Students</h1>
+                    <p>Register new students and manage student database</p>
+                </div>
+
+                <!-- Registration Form -->
+                <div class="card registration-card">
+                    <h2><i class="fas fa-user-plus"></i> Register New Student</h2>
+                    <form id="registrationForm" class="registration-form" onsubmit="registerStudent(event)">
+                        <div class="form-group">
+                            <label for="studentName">Student Name *</label>
+                            <input type="text" id="studentName" name="studentName" required placeholder="Enter student name">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="studentId">Student ID *</label>
+                            <input type="text" id="studentId" name="studentId" required placeholder="Enter student ID">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="studentEmail">Email (Optional)</label>
+                            <input type="email" id="studentEmail" name="studentEmail" placeholder="Enter email address">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="studentPhoto">Upload Photo *</label>
+                            <div class="photo-upload">
+                                <input type="file" id="studentPhoto" name="studentPhoto" accept="image/*" required>
+                                <div id="photoPreview" class="photo-preview">
+                                    <i class="fas fa-image"></i>
+                                    <p>No image selected</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-check"></i> Register Student
+                            </button>
+                            <button type="reset" class="btn btn-secondary">
+                                <i class="fas fa-redo"></i> Clear Form
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Registered Students List -->
+                <div class="card">
+                    <h2><i class="fas fa-list"></i> Registered Students</h2>
+                    <div class="students-grid" id="studentsGrid">
+                        <p class="empty-state">No students registered yet. Use the form above to register students.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AI Analytics Tab -->
+            <div id="ai-analytics" class="tab-content">
+                <div class="page-header">
+                    <h1><i class="fas fa-brain"></i> AI Analytics & Insights</h1>
+                    <p>Intelligent attendance analysis, predictions, and recommendations</p>
+                </div>
+
+                <div class="dashboard-grid">
+                    <!-- AI Insights Overview -->
+                    <div class="card ai-insights-overview">
+                        <h2><i class="fas fa-chart-bar"></i> Class Overview</h2>
+                        <div class="insights-metrics">
+                            <div class="insight-metric">
+                                <div class="metric-label">Class Average</div>
+                                <div class="metric-value" id="ai-avg-attendance">--</div>
+                            </div>
+                            <div class="insight-metric">
+                                <div class="metric-label">Today's Status</div>
+                                <div class="metric-value" id="ai-today-status">--</div>
+                            </div>
+                            <div class="insight-metric">
+                                <div class="metric-label">At-Risk Count</div>
+                                <div class="metric-value" id="ai-risk-count">--</div>
+                            </div>
+                            <div class="insight-metric">
+                                <div class="metric-label">Best Attendance Day</div>
+                                <div class="metric-value" id="ai-best-day">--</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Top Performers -->
+                    <div class="card ai-top-performers">
+                        <h2><i class="fas fa-trophy"></i> Top Performers</h2>
+                        <div id="aiTopPerformers" class="performers-list">
+                            <p class="empty-state">Loading data...</p>
+                        </div>
+                    </div>
+
+                    <!-- At-Risk Students -->
+                    <div class="card ai-at-risk">
+                        <h2><i class="fas fa-exclamation-triangle"></i> At-Risk Students</h2>
+                        <div id="aiAtRiskList" class="risk-list">
+                            <p class="empty-state">Loading data...</p>
+                        </div>
+                    </div>
+
+                    <!-- AI Chatbot -->
+                    <div class="card ai-chatbot-section">
+                        <h2><i class="fas fa-comments"></i> AI Assistant <span id="voiceStatus" class="voice-indicator" title="Voice disabled"></span></h2>
+                        <div class="chatbot-controls">
+                            <button class="btn btn-small" id="voiceToggleBtn" onclick="toggleVoiceMode()">
+                                <i class="fas fa-microphone"></i> Enable Voice
+                            </button>
+                            <button class="btn btn-small" id="voiceListenBtn" onclick="startVoiceInput()" disabled>
+                                <i class="fas fa-microphone-alt"></i> Listen
+                            </button>
+                            <button class="btn btn-small" id="stopListeningBtn" onclick="stopVoiceInput()" disabled style="display: none;">
+                                <i class="fas fa-stop-circle"></i> Stop Listening
+                            </button>
+                        </div>
+                        <div id="voiceStatus" class="voice-status-text"></div>
+                        <div class="chatbot-container">
+                            <div id="aiChatbox" class="chatbox">
+                                <div class="chat-message bot-message">
+                                    <p>👋 Hello! I'm your AI Attendance Assistant. Ask me about predictions, at-risk students, top performers, anomalies, recommendations, or trends! You can also use voice to give your name or ask questions.</p>
+                                </div>
+                            </div>
+                            <div class="chatbot-input-area">
+                                <input type="text" id="aiQuery" class="chat-input" placeholder="Ask about attendance, predictions, risks... or speak your name!">
+                                <button class="btn btn-primary" onclick="sendAIQuery()" style="width: 100%; margin-top: 8px;">
+                                    <i class="fas fa-paper-plane"></i> Ask AI
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Attendance Predictions -->
+                    <div class="card ai-predictions">
+                        <h2><i class="fas fa-crystal-ball"></i> Attendance Predictions</h2>
+                        <div id="aiPredictions" class="predictions-list">
+                            <p class="empty-state">Loading predictions...</p>
+                        </div>
+                    </div>
+
+                    <!-- Anomaly Detection -->
+                    <div class="card ai-anomalies">
+                        <h2><i class="fas fa-radar"></i> Pattern Anomalies</h2>
+                        <div id="aiAnomalies" class="anomalies-list">
+                            <p class="empty-state">Scanning for patterns...</p>
+                        </div>
+                    </div>
+
+                    <!-- Weekly Trends -->
+                    <div class="card ai-trends">
+                        <h2><i class="fas fa-chart-line"></i> Attendance Trends</h2>
+                        <div id="aiTrends" class="trends-list">
+                            <p class="empty-state">Loading trend data...</p>
+                        </div>
+                    </div>
+
+                    <!-- Recommendations -->
+                    <div class="card ai-recommendations">
+                        <h2><i class="fas fa-lightbulb"></i> AI Recommendations</h2>
+                        <div id="aiRecommendations" class="recommendations-list">
+                            <p class="empty-state">Generating recommendations...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Refresh Analytics Button -->
+                <div style="text-align: center; margin-top: 20px;">
+                    <button class="btn btn-primary" onclick="refreshAIAnalytics()">
+                        <i class="fas fa-sync-alt"></i> Refresh AI Analytics
+                    </button>
+                </div>
+            </div>
+
+            <!-- Settings Tab -->
+            <div id="settings" class="tab-content">
+                <div class="page-header">
+                    <h1><i class="fas fa-cog"></i> Settings</h1>
+                    <p>System configuration and options</p>
+                </div>
+
+                <div class="settings-container">
+                    <div class="card">
+                        <h2>System Settings</h2>
+                        <div class="settings-group">
+                            <label>
+                                <input type="checkbox" id="livenessDetection" checked>
+                                <span>Enable Liveness Detection</span>
+                            </label>
+                            <p class="setting-description">Prevent spoofing with photo detection</p>
+                        </div>
+                        <div class="settings-group">
+                            <label>
+                                <input type="checkbox" id="emotionDetection" checked>
+                                <span>Enable Emotion Detection</span>
+                            </label>
+                            <p class="setting-description">Analyze student emotions</p>
+                        </div>
+                        <div class="settings-group">
+                            <label>
+                                <input type="checkbox" id="maskDetection" checked>
+                                <span>Enable Mask Detection</span>
+                            </label>
+                            <p class="setting-description">Detect face masks</p>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <h2>System Information</h2>
+                        <div class="info-box">
+                            <p><strong>Server Status:</strong> <span id="serverStatus" class="status-badge">Checking...</span></p>
+                            <p><strong>Last Updated:</strong> <span id="lastUpdated">--:--</span></p>
+                            <p><strong>Database:</strong> attendance.csv</p>
+                            <p><strong>Students Folder:</strong> /students</p>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <h2>Utilities</h2>
+                        <button class="btn btn-secondary" onclick="initializeSystem()">
+                            <i class="fas fa-redo"></i> Reinitialize System
+                        </button>
+                        <button class="btn btn-secondary" onclick="downloadAttendance()">
+                            <i class="fas fa-download"></i> Export Attendance
+                        </button>
+                        <button class="btn btn-danger" onclick="clearTodayData()">
+                            <i class="fas fa-trash"></i> Clear Today's Data
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast"></div>
+
+    <!-- Scripts -->
+    <script src="ai-attendance.js"></script>
+    <script src="main.js"></script>
+</body>
+</html>
